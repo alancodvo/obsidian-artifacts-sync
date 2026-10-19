@@ -1,5 +1,13 @@
 import { FileSystemAdapter, Notice, Platform, Plugin, TAbstractFile, normalizePath, requestUrl } from "obsidian";
+import { Buffer as BufferPolyfill } from "buffer";
 import { parseArtifactsRemote, tokenStatus, validateSettings } from "./core";
+
+// Phones have no global Buffer. The esbuild inject (src/shims/buffer-global.js) rewrites every bare
+// `Buffer` inside this bundle, but code outside it (Obsidian's own requestUrl, anything reached
+// through globalThis) still looks the global up at run time. Provide it once, before any sync runs.
+if (typeof (globalThis as { Buffer?: unknown }).Buffer === "undefined") {
+  (globalThis as { Buffer?: unknown }).Buffer = BufferPolyfill;
+}
 import { ArtifactsApi, type RepoInfo, repoNameFromVault } from "./api";
 import { ArtifactsGit, GitConflictError, type GitFs, type GitHttp } from "./git";
 import { createRequestUrlFetch, createRequestUrlHttp } from "./obsidian-http";
@@ -255,9 +263,15 @@ export default class ArtifactsSyncPlugin extends Plugin {
       this.setStatus(`Artifacts: ${summary}`);
       this.notice(`Cloudflare Artifacts Sync: ${summary}`);
     } catch (err) {
-      const message = err instanceof GitConflictError ? err.message : `${label} failed: ${err instanceof Error ? err.message : String(err)}`;
+      let message = err instanceof GitConflictError ? err.message : `${label} failed: ${err instanceof Error ? err.message : String(err)}`;
+      // A ReferenceError means a missing global (phones have fewer than desktops). Phones have no
+      // console to read, so put the first stack frame in the notice; it says which module asked.
+      if (err instanceof ReferenceError && err.stack) {
+        const frame = err.stack.split("\n").map((l) => l.trim()).find((l) => l.startsWith("at ") || l.includes("@"));
+        if (frame) message += ` (${frame.slice(0, 120)})`;
+      }
       this.setStatus("Artifacts: error");
-      new Notice(`Cloudflare Artifacts Sync: ${message}`, 10_000);
+      new Notice(`Cloudflare Artifacts Sync ${this.manifest.version}: ${message}`, 10_000);
       console.error("[cloudflare-artifacts-sync]", err);
     } finally {
       this.running = false;

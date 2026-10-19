@@ -3,6 +3,7 @@
  * performs a real sync against an Artifacts repository (opt-in; run `npm run build` first).
  *
  *   ARTIFACTS_REMOTE=… ARTIFACTS_TOKEN=… npm run e2e:bundle
+ *   (or CLOUDFLARE_ACCOUNT_ID=… CLOUDFLARE_API_TOKEN=… to make a throwaway repository and token)
  *
  * The mobile pass makes every Node built-in throw, so it also proves the bundle loads and syncs
  * without them.
@@ -14,11 +15,30 @@ import { createRequire } from "node:module";
 import Module from "node:module";
 import { fakeAdapter } from "./fake-adapter";
 
-const remoteUrl = process.env.ARTIFACTS_REMOTE ?? "";
-const token = process.env.ARTIFACTS_TOKEN ?? "";
-if (!remoteUrl || !token) {
-  console.error("Set ARTIFACTS_REMOTE and ARTIFACTS_TOKEN (a write token).");
-  process.exit(2);
+let remoteUrl = process.env.ARTIFACTS_REMOTE ?? "";
+let token = process.env.ARTIFACTS_TOKEN ?? "";
+
+/**
+ * No repository token given: with API credentials, make a throwaway repository and a short-lived
+ * write token (same namespace as e2e-api.ts), so the token never has to pass through a human.
+ */
+async function resolveTarget(): Promise<void> {
+  if (remoteUrl && token) return;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID ?? "";
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN ?? "";
+  if (!accountId || !apiToken) {
+    console.error("Set ARTIFACTS_REMOTE and ARTIFACTS_TOKEN (a write token), or CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.");
+    process.exit(2);
+  }
+  const { ArtifactsApi } = await import("../src/api");
+  const api = new ArtifactsApi({ accountId, apiToken });
+  const namespace = "artifacts-sync-e2e";
+  const repoName = `bundle-${Math.random().toString(36).slice(2, 10)}`;
+  await api.ensureNamespace(namespace);
+  const repo = await api.ensureRepo(namespace, repoName);
+  remoteUrl = repo.remote;
+  token = (await api.issueToken(namespace, repoName, "write", 600)).token;
+  console.log(`note: delete the test repository when done: wrangler artifacts repos delete ${repoName} --namespace ${namespace}`);
 }
 const mainJs = path.resolve("main.js");
 if (!fs.existsSync(mainJs)) {
@@ -116,6 +136,7 @@ interface PluginLike {
 }
 
 async function main(): Promise<void> {
+  await resolveTarget();
   const results = [await runMode("mobile"), await runMode("desktop")];
   process.exit(results.every(Boolean) ? 0 : 1);
 }
