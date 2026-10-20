@@ -6,6 +6,6 @@
 	"description": "Sync your vault, or one folder of it, with a Cloudflare Artifacts repository (a Git-compatible store). Commit, pull and push with one command or on a timer. Works on desktop and mobile.",
 	"author": "KOIYAL",
 	"authorUrl": "https://koiyal.com",
-	"fundingUrl": "https://github.com/sponsors/KOIYAL",
+	"fundingUrl": "https://buymeacoffee.com/koiyal",
 	"isDesktopOnly": false
 }

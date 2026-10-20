@@ -3,7 +3,7 @@
 Obsidian の保管庫（またはその中の 1 フォルダ）を、Cloudflare Artifacts のリポジトリと同期するプラグインです。Artifacts は Cloudflare の「Git として読み書きできる保存場所」で、ノートに履歴がつき、端末の外にも控えが残ります。GitHub のアカウントも Git の知識も要りません。設定を 1 度入れたら、あとは **Sync now** を押すだけです。
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/KOIYAL)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-%E2%98%95-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/koiyal)
 
 > English: [README.md](README.md)
 

@@ -5,7 +5,7 @@ Sync your Obsidian vault, or one folder of it, with a [Cloudflare Artifacts](htt
 One command (or a timer) does commit → pull → push. No Git knowledge is needed: paste a remote URL and a token, and press **Sync now**.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/KOIYAL)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-%E2%98%95-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/koiyal)
 
 > 日本語のドキュメントは [README.ja.md](README.ja.md) にあります（導入手順・使い方・困ったときの対処）。
 
