@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_IGNORE,
+  defaultIgnore,
   authFor,
   commitMessage,
   inspectToken,
@@ -52,10 +53,10 @@ describe("tokens", () => {
 
 describe("isIgnored", () => {
   it("ignores the Obsidian config folder and trash anywhere", () => {
-    expect(isIgnored(".obsidian/workspace.json", DEFAULT_IGNORE)).toBe(true);
-    expect(isIgnored("notes/.trash/old.md", DEFAULT_IGNORE)).toBe(true);
-    expect(isIgnored("notes/.DS_Store", DEFAULT_IGNORE)).toBe(true);
-    expect(isIgnored("notes/today.md", DEFAULT_IGNORE)).toBe(false);
+    expect(isIgnored(".obsidian/workspace.json", defaultIgnore(".obsidian"))).toBe(true);
+    expect(isIgnored("notes/.trash/old.md", defaultIgnore(".obsidian"))).toBe(true);
+    expect(isIgnored("notes/.DS_Store", defaultIgnore(".obsidian"))).toBe(true);
+    expect(isIgnored("notes/today.md", defaultIgnore(".obsidian"))).toBe(false);
   });
 
   it("matches exact relative paths and plain names", () => {
@@ -74,7 +75,7 @@ describe("planChanges", () => {
       ["deleted.md", 1, 0, 1],
       [".obsidian/app.json", 0, 2, 0],
     ];
-    expect(planChanges(rows, DEFAULT_IGNORE)).toEqual({ add: ["new.md", "modified.md"], remove: ["deleted.md"] });
+    expect(planChanges(rows, defaultIgnore(".obsidian"))).toEqual({ add: ["new.md", "modified.md"], remove: ["deleted.md"] });
   });
 });
 

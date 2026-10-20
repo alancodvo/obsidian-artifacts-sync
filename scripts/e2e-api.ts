@@ -12,7 +12,7 @@ import path from "node:path";
 import { ArtifactsApi } from "../src/api";
 import { ArtifactsGit } from "../src/git";
 import { nodeFs, nodeHttp } from "../src/node-env";
-import { DEFAULT_IGNORE, tokenStatus } from "../src/core";
+import { defaultIgnore, tokenStatus } from "../src/core";
 
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID ?? "";
 const apiToken = process.env.CLOUDFLARE_API_TOKEN ?? "";
@@ -47,7 +47,7 @@ async function main(): Promise<void> {
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "artifacts-sync-api-e2e-"));
   fs.writeFileSync(path.join(dir, "hello.md"), "# hello\n");
-  const git = new ArtifactsGit({ dir, fs: nodeFs(), http: nodeHttp(), remoteUrl: repo.remote, token: issued.token, branch: "main", ignore: DEFAULT_IGNORE, author: { name: "e2e", email: "e2e@example.com" } });
+  const git = new ArtifactsGit({ dir, fs: nodeFs(), http: nodeHttp(), remoteUrl: repo.remote, token: issued.token, branch: "main", ignore: defaultIgnore(".obsidian"), author: { name: "e2e", email: "e2e@example.com" } });
   const result = await git.sync();
   check("push with the issued token works", result.pushed && result.committed);
   fs.rmSync(dir, { recursive: true, force: true });

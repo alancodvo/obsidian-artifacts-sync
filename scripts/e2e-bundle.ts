@@ -127,7 +127,7 @@ async function runMode(mode: Mode): Promise<boolean> {
         fs.writeFileSync(path.join(root, p), data);
       },
     });
-    plugin.app = { vault: { adapter, getName: () => "bundle-vault", on: () => ({}) }, workspace: {} };
+    plugin.app = { vault: { adapter, configDir: ".obsidian", getName: () => "bundle-vault", on: () => ({}) }, workspace: {} };
     await plugin.onload();
     const write = (rel: string, text: string) => {
       fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });

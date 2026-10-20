@@ -56,7 +56,16 @@ export function authFor(token: string): { username: string; password: string } {
 }
 
 /** Default paths never sent to the remote (vault-relative, forward slashes). */
-export const DEFAULT_IGNORE = [".obsidian/", ".trash/", ".DS_Store", "node_modules/"];
+/**
+ * Ignored by default, besides the vault's config folder: that one is added at load time from
+ * `vault.configDir` (the user can rename it), see `defaultIgnore`.
+ */
+export const DEFAULT_IGNORE = [".trash/", ".DS_Store", "node_modules/"];
+
+/** The full default ignore list for a vault whose config folder is `configDir`. */
+export function defaultIgnore(configDir: string): string[] {
+  return [`${configDir.replace(/\/+$/, "")}/`, ...DEFAULT_IGNORE];
+}
 
 /**
  * Whether a vault-relative path is excluded. A pattern ending in "/" matches a directory and

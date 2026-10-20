@@ -9,7 +9,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ArtifactsGit } from "../src/git";
-import { DEFAULT_IGNORE } from "../src/core";
+import { defaultIgnore } from "../src/core";
 import { createVaultFs } from "../src/vault-fs";
 import { createRequestUrlHttp, type RequestUrlLike } from "../src/obsidian-http";
 import { fakeAdapter } from "./fake-adapter";
@@ -38,7 +38,7 @@ async function main(): Promise<void> {
   const vfs = createVaultFs(fakeAdapter(root));
   const http = createRequestUrlHttp(requestUrl);
   // Sync one folder of the "vault", like the Folder to sync setting on a phone.
-  const mk = () => new ArtifactsGit({ dir: "Knowledge", fs: vfs, http, remoteUrl, token, branch: "main", ignore: DEFAULT_IGNORE, author: { name: "mobile-e2e", email: "e2e@example.com" } });
+  const mk = () => new ArtifactsGit({ dir: "Knowledge", fs: vfs, http, remoteUrl, token, branch: "main", ignore: defaultIgnore(".obsidian"), author: { name: "mobile-e2e", email: "e2e@example.com" } });
   const stamp = Date.now().toString(36);
 
   const r1 = await mk().sync();

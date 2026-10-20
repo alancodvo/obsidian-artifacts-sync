@@ -1,7 +1,7 @@
 import { FileSystemAdapter, Notice, Platform, Plugin, TAbstractFile, normalizePath, requestUrl } from "obsidian";
 // The npm polyfill (not Node's built-in; the trailing slash makes that explicit for bundler and reviewer).
 import { Buffer as BufferPolyfill } from "buffer/";
-import { DEFAULT_IGNORE, parseArtifactsRemote, tokenStatus, validateSettings } from "./core";
+import { parseArtifactsRemote, tokenStatus, validateSettings } from "./core";
 
 // Phones have no global Buffer. The esbuild inject (src/shims/buffer-global.js) rewrites every bare
 // `Buffer` inside this bundle, but code outside it (Obsidian's own requestUrl, anything reached
@@ -56,12 +56,10 @@ export default class ArtifactsSyncPlugin extends Plugin {
 
   async loadSettings(): Promise<void> {
     this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<ArtifactsSyncSettings> | null) };
-    // The config folder is `.obsidian` by default but the user can rename it; ignore the real one.
+    // The vault's config folder (usually .obsidian, but the user can rename it) is always ignored;
+    // it is added here rather than in the defaults because its name is only known at run time.
     const configDir = `${this.app.vault.configDir}/`;
-    const stock = DEFAULT_IGNORE[0]; // the usual config folder, as shipped in the defaults
-    if (configDir !== stock && !this.settings.ignore.includes(configDir)) {
-      this.settings.ignore = this.settings.ignore.map((p) => (p === stock ? configDir : p));
-    }
+    if (!this.settings.ignore.includes(configDir)) this.settings.ignore = [configDir, ...this.settings.ignore];
   }
 
   async saveSettings(): Promise<void> {
