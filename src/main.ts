@@ -1,13 +1,13 @@
 import { FileSystemAdapter, Notice, Platform, Plugin, TAbstractFile, normalizePath, requestUrl } from "obsidian";
-import { Buffer as BufferPolyfill } from "buffer";
-import { parseArtifactsRemote, tokenStatus, validateSettings } from "./core";
+// The npm polyfill (not Node's built-in; the trailing slash makes that explicit for bundler and reviewer).
+import { Buffer as BufferPolyfill } from "buffer/";
+import { DEFAULT_IGNORE, parseArtifactsRemote, tokenStatus, validateSettings } from "./core";
 
 // Phones have no global Buffer. The esbuild inject (src/shims/buffer-global.js) rewrites every bare
 // `Buffer` inside this bundle, but code outside it (Obsidian's own requestUrl, anything reached
-// through globalThis) still looks the global up at run time. Provide it once, before any sync runs.
-if (typeof (globalThis as { Buffer?: unknown }).Buffer === "undefined") {
-  (globalThis as { Buffer?: unknown }).Buffer = BufferPolyfill;
-}
+// through the window) still looks the global up at run time. Provide it once, before any sync runs.
+const win = window as Window & { Buffer?: unknown };
+if (typeof win.Buffer === "undefined") win.Buffer = BufferPolyfill;
 import { ArtifactsApi, type RepoInfo, repoNameFromVault } from "./api";
 import { ArtifactsGit, GitConflictError, errorMessages, type GitFs, type GitHttp } from "./git";
 import { createRequestUrlFetch, createRequestUrlHttp } from "./obsidian-http";
@@ -56,6 +56,12 @@ export default class ArtifactsSyncPlugin extends Plugin {
 
   async loadSettings(): Promise<void> {
     this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<ArtifactsSyncSettings> | null) };
+    // The config folder is `.obsidian` by default but the user can rename it; ignore the real one.
+    const configDir = `${this.app.vault.configDir}/`;
+    const stock = DEFAULT_IGNORE[0]; // the usual config folder, as shipped in the defaults
+    if (configDir !== stock && !this.settings.ignore.includes(configDir)) {
+      this.settings.ignore = this.settings.ignore.map((p) => (p === stock ? configDir : p));
+    }
   }
 
   async saveSettings(): Promise<void> {
@@ -270,10 +276,10 @@ export default class ArtifactsSyncPlugin extends Plugin {
       if (e instanceof Error) {
         lines.push(`${indent}${e.name}: ${e.message}`);
         const code = (e as { code?: unknown }).code;
-        if (code) lines.push(`${indent}code: ${String(code)}`);
+        if (typeof code === "string" || typeof code === "number") lines.push(`${indent}code: ${code}`);
         if (e.stack) lines.push(...e.stack.split("\n").slice(0, 12).map((l) => `${indent}  ${l.trim()}`));
       } else {
-        lines.push(`${indent}${String(e)}`);
+        lines.push(`${indent}${errorMessages(e, 1)[0] ?? typeof e}`);
       }
       const inner = (e as { errors?: unknown }).errors;
       if (Array.isArray(inner)) {

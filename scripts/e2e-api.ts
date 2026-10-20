@@ -26,7 +26,7 @@ const check = (label: string, ok: boolean) => {
 };
 
 async function main(): Promise<void> {
-  const api = new ArtifactsApi({ accountId, apiToken });
+  const api = new ArtifactsApi({ accountId, apiToken, fetchImpl: (input, init) => fetch(input, init) });
   const namespace = "artifacts-sync-e2e";
   const repoName = `e2e-${Date.now().toString(36)}`;
 

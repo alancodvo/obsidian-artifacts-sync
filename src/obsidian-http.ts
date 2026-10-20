@@ -92,5 +92,5 @@ export function createRequestUrlFetch(requestUrl: RequestUrlLike): typeof fetch 
       throw: false,
     });
     return new Response(res.arrayBuffer, { status: res.status, headers: res.headers });
-  }) as typeof fetch;
+  });
 }

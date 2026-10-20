@@ -9,8 +9,8 @@
 export interface ApiClientOptions {
   accountId: string;
   apiToken: string;
-  /** Injectable for tests. Defaults to the global fetch. */
-  fetchImpl?: typeof fetch;
+  /** The HTTP function to use: the plugin passes one built on Obsidian's requestUrl; scripts and tests pass their own. */
+  fetchImpl: typeof fetch;
   baseUrl?: string;
 }
 
@@ -23,6 +23,11 @@ export interface IssuedToken {
   /** The secret, including the `?expires=` suffix when the API returns one. */
   token: string;
   expiresAt: number | null;
+}
+
+/** A JSON field as text: strings as they are, numbers and booleans spelled out, anything else empty. */
+function str(v: unknown): string {
+  return typeof v === "string" ? v : typeof v === "number" || typeof v === "boolean" ? String(v) : "";
 }
 
 export class ArtifactsApiError extends Error {
@@ -63,9 +68,9 @@ export class ArtifactsApi {
   private readonly baseUrl: string;
 
   constructor(private readonly opts: ApiClientOptions) {
-    // Wrap the global fetch so it is never called detached from `window` (Electron throws
-    // "Failed to execute 'fetch' on 'Window': Illegal invocation" for an unbound reference).
-    this.fetchImpl = opts.fetchImpl ?? ((input, init) => fetch(input, init));
+    // The plugin passes a client built on Obsidian's requestUrl (works on mobile and is not bound to
+    // a window); scripts and tests pass their own. There is no global default on purpose.
+    this.fetchImpl = opts.fetchImpl;
     this.baseUrl = (opts.baseUrl ?? "https://api.cloudflare.com/client/v4").replace(/\/$/, "");
   }
 
@@ -86,7 +91,7 @@ export class ArtifactsApi {
       // keep empty
     }
     if (!res.ok || json.success === false) {
-      const errors = Array.isArray(json.errors) ? (json.errors as Json[]).map((e) => `${e.code ?? ""} ${e.message ?? ""}`.trim()) : [];
+      const errors = Array.isArray(json.errors) ? (json.errors as Json[]).map((e) => `${str(e.code)} ${str(e.message)}`.trim()) : [];
       throw new ArtifactsApiError(errors.join("; ") || `HTTP ${res.status}`, res.status);
     }
     return (json.result as Json) ?? {};
@@ -96,7 +101,7 @@ export class ArtifactsApi {
   async listNamespaces(): Promise<string[]> {
     const result = await this.call("GET", "/artifacts/namespaces");
     const items = Array.isArray(result) ? (result as Json[]) : Array.isArray(result.namespaces) ? (result.namespaces as Json[]) : [];
-    return items.map((n) => String(n.namespace ?? n.name ?? "")).filter(Boolean);
+    return items.map((n) => str(n.namespace) || str(n.name)).filter(Boolean);
   }
 
   async ensureNamespace(namespace: string): Promise<void> {
@@ -113,13 +118,13 @@ export class ArtifactsApi {
   async listRepos(namespace: string): Promise<RepoInfo[]> {
     const result = await this.call("GET", `/artifacts/namespaces/${encodeURIComponent(namespace)}/repos`);
     const items = Array.isArray(result) ? (result as Json[]) : Array.isArray(result.repos) ? (result.repos as Json[]) : [];
-    return items.map((r) => ({ name: String(r.name ?? ""), remote: String(r.remote ?? "") })).filter((r) => r.name);
+    return items.map((r) => ({ name: str(r.name), remote: str(r.remote) })).filter((r) => r.name);
   }
 
   async getRepo(namespace: string, name: string): Promise<RepoInfo | null> {
     try {
       const result = await this.call("GET", `/artifacts/namespaces/${encodeURIComponent(namespace)}/repos/${encodeURIComponent(name)}`);
-      return { name: String(result.name ?? name), remote: String(result.remote ?? "") };
+      return { name: str(result.name) || name, remote: str(result.remote) };
     } catch (err) {
       if (err instanceof ArtifactsApiError && err.status === 404) return null;
       throw err;
@@ -134,7 +139,7 @@ export class ArtifactsApi {
       name,
       "default-branch": defaultBranch,
     });
-    return { name: String(result.name ?? name), remote: String(result.remote ?? "") };
+    return { name: str(result.name) || name, remote: str(result.remote) };
   }
 
   /** Issue a repository-scoped token. ttlSeconds defaults to 30 days. */

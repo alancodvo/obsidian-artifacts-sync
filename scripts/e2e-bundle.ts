@@ -35,7 +35,7 @@ async function resolveTarget(): Promise<void> {
     process.exit(2);
   }
   const { ArtifactsApi } = await import("../src/api");
-  const api = new ArtifactsApi({ accountId, apiToken });
+  const api = new ArtifactsApi({ accountId, apiToken, fetchImpl: (input, init) => fetch(input, init) });
   const namespace = "artifacts-sync-e2e";
   const repoName = `bundle-${Math.random().toString(36).slice(2, 10)}`;
   await api.ensureNamespace(namespace);
@@ -97,6 +97,8 @@ async function runMode(mode: Mode): Promise<boolean> {
     },
   };
 
+  // The plugin reads `window` (the Buffer global, timers); in Node the global object stands in for it.
+  (globalThis as { window?: unknown }).window ??= globalThis;
   const origLoad = (Module as unknown as { _load: (...args: unknown[]) => unknown })._load;
   (Module as unknown as { _load: (...args: unknown[]) => unknown })._load = function (request: string, ...rest: unknown[]) {
     if (request === "obsidian") return obsidianStub;

@@ -71,7 +71,7 @@ export function errorMessages(err: unknown, limit = 5): string[] {
       for (const x of inner) walk(x, depth + 1);
       return;
     }
-    const message = e instanceof Error ? e.message || e.name : String(e);
+    const message = e instanceof Error ? e.message || e.name : typeof e === "string" ? e : typeof e === "number" || typeof e === "boolean" ? String(e) : `(${typeof e})`;
     if (!seen.has(message)) {
       seen.add(message);
       out.push(message);

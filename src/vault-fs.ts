@@ -209,7 +209,7 @@ export function createVaultFs(adapter: AdapterLike, concurrency = ADAPTER_CONCUR
       await mkdirp(parentOf(p));
       try {
         await limit(() => adapter.writeBinary(p, bytes));
-      } catch (err) {
+      } catch {
         // The parent may have vanished or not been visible yet; make sure of it and try once more.
         await mkdirp(parentOf(p));
         try {
