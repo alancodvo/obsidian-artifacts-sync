@@ -15,19 +15,9 @@ Obsidian の保管庫（またはその中の 1 フォルダ）を、Cloudflare 
 
 ## 1. インストール
 
-### コミュニティプラグインに載っている場合
+設定 → コミュニティプラグイン → 「閲覧」→ **Cloudflare Artifacts Sync** で検索 → インストール → 有効化。PC でもスマホでも同じです（Obsidian 1.13 以上）。
 
-設定 → コミュニティプラグイン → 「閲覧」→ **Cloudflare Artifacts Sync** で検索 → インストール → 有効化。
-
-### 載る前（ファイルを置く）
-
-1. [リリースページ](https://github.com/alancodvo/obsidian-artifacts-sync/releases/latest) から `main.js`・`manifest.json`・`styles.css` の 3 つを取る
-2. 保管庫の中の `.obsidian/plugins/cloudflare-artifacts-sync/` というフォルダを作り、3 つを入れる（**フォルダ名はこのとおりに**。違う名前でも動きますが、更新のときに迷います）
-   - PC: エクスプローラー / Finder で保管庫のフォルダを開く。`.obsidian` は隠しフォルダなので「隠しファイルを表示」にする
-   - iPhone / iPad: 「ファイル」アプリ → Obsidian の保管庫 → `.obsidian/plugins/` に入れる
-   - Android: ファイルマネージャで保管庫（例: `Documents/保管庫名`）→ `.obsidian/plugins/` に入れる
-3. Obsidian を**完全に終了して開き直す**（スマホは最近使ったアプリの一覧からも閉じる）
-4. 設定 → コミュニティプラグイン → 「Cloudflare Artifacts Sync」をオンにする
+掲載ページ: https://community.obsidian.md/plugins/cloudflare-artifacts-sync
 
 ---
 
