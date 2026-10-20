@@ -4,7 +4,10 @@ Sync your Obsidian vault, or one folder of it, with a [Cloudflare Artifacts](htt
 
 One command (or a timer) does commit → pull → push. No Git knowledge is needed: paste a remote URL and a token, and press **Sync now**.
 
-日本語の導入手順と使い方は **[README.ja.md](README.ja.md)** にあります。
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/KOIYAL)
+
+> 日本語のドキュメントは [README.ja.md](README.ja.md) にあります（導入手順・使い方・困ったときの対処）。
 
 Requires a Cloudflare account with Artifacts available (Workers Paid plan at the time of writing). Nothing else is required, and nothing is paid to the plugin author.
 
@@ -78,14 +81,9 @@ ARTIFACTS_REMOTE=… ARTIFACTS_TOKEN=… npm run e2e:bundle   # the built main.j
 CLOUDFLARE_ACCOUNT_ID=… CLOUDFLARE_API_TOKEN=… npm run e2e:api   # REST client: namespace, repo, token, push
 ```
 
-## Support
-
-If this plugin saves you time, you can support its development through [GitHub Sponsors](https://github.com/sponsors/KOIYAL). Bug reports and feature requests are welcome in the [issue tracker](https://github.com/KOIYAL/obsidian-artifacts-sync/issues).
+Issues and pull requests are welcome in English or Japanese.
 
 ## License
 
-[MIT](LICENSE) © 2026 KOIYAL (Yoshihiro Arakawa). Built on [isomorphic-git](https://isomorphic-git.org/) (MIT). Not affiliated with Cloudflare or Obsidian.
-
-## 日本語
-
-導入手順・使い方・困ったときの対処は **[README.ja.md](README.ja.md)** をご覧ください。
+[MIT](LICENSE). In short: use it freely, keep the copyright notice. Built on
+[isomorphic-git](https://isomorphic-git.org/) (MIT). Not affiliated with Cloudflare or Obsidian.

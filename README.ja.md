@@ -2,6 +2,11 @@
 
 Obsidian の保管庫（またはその中の 1 フォルダ）を、Cloudflare Artifacts のリポジトリと同期するプラグインです。Artifacts は Cloudflare の「Git として読み書きできる保存場所」で、ノートに履歴がつき、端末の外にも控えが残ります。GitHub のアカウントも Git の知識も要りません。設定を 1 度入れたら、あとは **Sync now** を押すだけです。
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/KOIYAL)
+
+> English: [README.md](README.md)
+
 - 動く環境: PC（Windows / Mac / Linux）と スマホ（iOS / Android）の Obsidian
 - 必要なもの: Cloudflare のアカウント（Artifacts が使えるプラン。2026 年 10 月時点では Workers Paid）。プラグインの作者に払うものはありません
 - 通信先: 設定した Artifacts の URL（ノートの中身を送る）と、準備とトークン更新のときだけ使う `api.cloudflare.com` の 2 つ。計測や広告はありません
@@ -151,8 +156,8 @@ Cloudflare ダッシュボードの **Workers & Pages** を開くと、右側に
 
 ---
 
-## 支援とライセンス
+不具合や要望は [Issues](https://github.com/KOIYAL/obsidian-artifacts-sync/issues) へ（日本語で構いません）。
 
-- 役に立ったら [GitHub Sponsors](https://github.com/sponsors/KOIYAL) で開発を支援いただけます。不具合や要望は [Issues](https://github.com/KOIYAL/obsidian-artifacts-sync/issues) へ
-- ライセンスは [MIT](LICENSE)。Git の処理には [isomorphic-git](https://isomorphic-git.org/)（MIT）を使っています。Cloudflare 社・Obsidian 社とは関係のない個人開発です
-- 作者: [KOIYAL](https://koiyal.com)（荒川善大）
+## ライセンス
+
+[MIT](LICENSE)。自由に使えます。著作権表示だけ残してください。Git の処理には [isomorphic-git](https://isomorphic-git.org/)（MIT）を使っています。Cloudflare 社・Obsidian 社とは関係のない個人開発（[KOIYAL](https://koiyal.com)・荒川善大）です。
