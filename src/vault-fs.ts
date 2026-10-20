@@ -5,6 +5,14 @@
  *
  * Only the subset isomorphic-git uses is implemented: readFile, writeFile, unlink, readdir, mkdir,
  * rmdir, stat, lstat (same as stat), readlink and symlink (unsupported: ENOSYS).
+ *
+ * Two things the phone's adapter needs that a desktop file system does not:
+ * - isomorphic-git fires hundreds of file operations at once during a checkout. Every one crosses
+ *   the JavaScript ↔ native bridge on a phone, so they are funnelled through a small concurrency
+ *   limit, and folder creation is de-duplicated so two parallel writers never create the same
+ *   folder twice.
+ * - Every error carries the operation and path, and the adapter's own error text, so a failure on a
+ *   phone (where there is no console) can be read from the notice.
  */
 
 /** The DataAdapter methods we rely on (a structural type, so tests can supply a fake). */
@@ -34,8 +42,12 @@ export interface VaultStat {
   isSymbolicLink(): boolean;
 }
 
-class FsError extends Error {
-  constructor(readonly code: string, message: string) {
+export class FsError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly cause?: unknown,
+  ) {
     super(message);
     this.name = "FsError";
   }
@@ -57,9 +69,24 @@ export function vaultPath(p: string): string {
   return parts.join("/");
 }
 
+/** The vault root is "" after normalization; Obsidian's adapter wants "/" for it. */
+function adapterPath(p: string): string {
+  return p === "" ? "/" : p;
+}
+
 function parentOf(p: string): string {
   const i = p.lastIndexOf("/");
   return i < 0 ? "" : p.slice(0, i);
+}
+
+function describe(err: unknown): string {
+  if (err instanceof Error) return err.message || err.name;
+  if (typeof err === "string") return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
 }
 
 const encoder = new TextEncoder();
@@ -75,18 +102,54 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
-export function createVaultFs(adapter: AdapterLike) {
+/** Run at most `max` jobs at once; the rest wait their turn in order. */
+export function createLimiter(max: number): <T>(job: () => Promise<T>) => Promise<T> {
+  let active = 0;
+  const queue: Array<() => void> = [];
+  const next = () => {
+    active--;
+    const run = queue.shift();
+    if (run) run();
+  };
+  return <T>(job: () => Promise<T>): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      const run = () => {
+        active++;
+        // Through a resolved promise, so a job that throws synchronously still releases its slot.
+        Promise.resolve()
+          .then(job)
+          .then(resolve, reject)
+          .finally(next);
+      };
+      if (active < max) run();
+      else queue.push(run);
+    });
+}
+
+/** How many adapter calls may be in flight at once (the phone's bridge does not like hundreds). */
+export const ADAPTER_CONCURRENCY = 8;
+
+export function createVaultFs(adapter: AdapterLike, concurrency = ADAPTER_CONCURRENCY) {
+  const limit = createLimiter(concurrency);
+  const exists = (p: string) => limit(() => adapter.exists(adapterPath(p)));
+  const rawStat = (p: string) => limit(() => adapter.stat(adapterPath(p)));
+
   const statOf = async (p: string): Promise<VaultStat> => {
-    const s = await adapter.stat(p);
+    let s: Awaited<ReturnType<AdapterLike["stat"]>>;
+    try {
+      s = await rawStat(p);
+    } catch (err) {
+      throw new FsError("EIO", `stat '${p}': ${describe(err)}`, err);
+    }
     if (!s) throw new FsError("ENOENT", `ENOENT: no such file or directory, stat '${p}'`);
     const isDir = s.type === "folder";
     return {
       type: isDir ? "dir" : "file",
       mode: isDir ? 0o40755 : 0o100644,
-      size: s.size,
+      size: s.size ?? 0,
       ino: 0,
-      mtimeMs: s.mtime,
-      ctimeMs: s.ctime,
+      mtimeMs: s.mtime ?? 0,
+      ctimeMs: s.ctime ?? 0,
       uid: 0,
       gid: 0,
       dev: 0,
@@ -96,55 +159,109 @@ export function createVaultFs(adapter: AdapterLike) {
     };
   };
 
+  // One creation per folder at a time: parallel writers into the same new folder share the promise
+  // instead of both calling mkdir (the second call fails on the phone).
+  const creating = new Map<string, Promise<void>>();
   const mkdirp = async (p: string): Promise<void> => {
-    if (p === "" || (await adapter.exists(p))) return;
-    await mkdirp(parentOf(p));
-    await adapter.mkdir(p);
+    if (p === "") return;
+    const pending = creating.get(p);
+    if (pending) return pending;
+    const job = (async () => {
+      if (await exists(p)) return;
+      await mkdirp(parentOf(p));
+      try {
+        await limit(() => adapter.mkdir(p));
+      } catch (err) {
+        // Lost a race with another creator, or the adapter reports "exists" as an error: fine either way.
+        if (await exists(p)) return;
+        throw new FsError("EIO", `mkdir '${p}': ${describe(err)}`, err);
+      }
+    })();
+    creating.set(p, job);
+    try {
+      await job;
+    } finally {
+      creating.delete(p);
+    }
   };
 
   const promises = {
     async readFile(path: string, options?: string | { encoding?: string }): Promise<Uint8Array | string> {
       const p = vaultPath(path);
-      if (!(await adapter.exists(p))) throw new FsError("ENOENT", `ENOENT: no such file or directory, open '${p}'`);
-      const s = await adapter.stat(p);
+      if (!(await exists(p))) throw new FsError("ENOENT", `ENOENT: no such file or directory, open '${p}'`);
+      const s = await rawStat(p);
       if (s?.type === "folder") throw new FsError("EISDIR", `EISDIR: illegal operation on a directory, read '${p}'`);
-      const bytes = new Uint8Array(await adapter.readBinary(p));
+      let buf: ArrayBuffer;
+      try {
+        buf = await limit(() => adapter.readBinary(p));
+      } catch (err) {
+        throw new FsError("EIO", `read '${p}': ${describe(err)}`, err);
+      }
+      const bytes = new Uint8Array(buf);
       const encoding = typeof options === "string" ? options : options?.encoding;
       return encoding ? decoder.decode(bytes) : bytes;
     },
 
     async writeFile(path: string, data: string | Uint8Array | ArrayBuffer): Promise<void> {
       const p = vaultPath(path);
+      if (p === "") throw new FsError("EISDIR", "EISDIR: illegal operation on a directory, write ''");
+      const bytes = toArrayBuffer(toUint8(data));
       await mkdirp(parentOf(p));
-      await adapter.writeBinary(p, toArrayBuffer(toUint8(data)));
+      try {
+        await limit(() => adapter.writeBinary(p, bytes));
+      } catch (err) {
+        // The parent may have vanished or not been visible yet; make sure of it and try once more.
+        await mkdirp(parentOf(p));
+        try {
+          await limit(() => adapter.writeBinary(p, bytes));
+        } catch (again) {
+          throw new FsError("EIO", `write '${p}': ${describe(again)}`, again);
+        }
+      }
     },
 
     async unlink(path: string): Promise<void> {
       const p = vaultPath(path);
-      if (!(await adapter.exists(p))) throw new FsError("ENOENT", `ENOENT: no such file or directory, unlink '${p}'`);
-      await adapter.remove(p);
+      if (!(await exists(p))) throw new FsError("ENOENT", `ENOENT: no such file or directory, unlink '${p}'`);
+      try {
+        await limit(() => adapter.remove(p));
+      } catch (err) {
+        if (!(await exists(p))) return;
+        throw new FsError("EIO", `unlink '${p}': ${describe(err)}`, err);
+      }
     },
 
     async readdir(path: string): Promise<string[]> {
       const p = vaultPath(path);
-      const s = await adapter.stat(p);
+      const s = await rawStat(p);
       if (!s && p !== "") throw new FsError("ENOENT", `ENOENT: no such file or directory, scandir '${p}'`);
       if (s && s.type !== "folder") throw new FsError("ENOTDIR", `ENOTDIR: not a directory, scandir '${p}'`);
-      const listing = await adapter.list(p);
-      const names = [...listing.files, ...listing.folders].map((full) => full.split("/").pop() ?? full);
+      let listing: Awaited<ReturnType<AdapterLike["list"]>>;
+      try {
+        listing = await limit(() => adapter.list(adapterPath(p)));
+      } catch (err) {
+        throw new FsError("EIO", `scandir '${p}': ${describe(err)}`, err);
+      }
+      const names = [...(listing.files ?? []), ...(listing.folders ?? [])].map((full) => full.replace(/\/+$/, "").split("/").pop() ?? full);
       return names.filter((n) => n !== "");
     },
 
     async mkdir(path: string): Promise<void> {
       const p = vaultPath(path);
-      if (await adapter.exists(p)) throw new FsError("EEXIST", `EEXIST: file already exists, mkdir '${p}'`);
+      if (p === "") return;
+      if (await exists(p)) throw new FsError("EEXIST", `EEXIST: file already exists, mkdir '${p}'`);
       await mkdirp(p);
     },
 
     async rmdir(path: string): Promise<void> {
       const p = vaultPath(path);
-      if (!(await adapter.exists(p))) throw new FsError("ENOENT", `ENOENT: no such file or directory, rmdir '${p}'`);
-      await adapter.rmdir(p, false);
+      if (!(await exists(p))) throw new FsError("ENOENT", `ENOENT: no such file or directory, rmdir '${p}'`);
+      try {
+        await limit(() => adapter.rmdir(p, false));
+      } catch (err) {
+        if (!(await exists(p))) return;
+        throw new FsError("ENOTEMPTY", `rmdir '${p}': ${describe(err)}`, err);
+      }
     },
 
     async stat(path: string): Promise<VaultStat> {

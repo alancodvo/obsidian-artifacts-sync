@@ -38,7 +38,7 @@ Do **not** press Set up again: it would create a second repository when the vaul
 1. On the second device, enter the same **Account ID**, **API token** and **Namespace**.
 2. Press **Choose repository** ("Connect to an existing repository") and pick the repository your first device created. The plugin issues a token for it and fills in the remote URL.
 3. Set **Branch** and **Folder to sync** to the same values as on the first device (usually `main` and empty, or the one folder you chose).
-4. Press **Sync now**. The notes come down from the repository; anything already on this device is committed on top.
+4. Press **Sync now**. The notes come down from the repository; anything already on this device is committed on top. If a note exists on both sides with different content, the repository's version is put in place and the device's copy is kept next to it as `<name>.local-<timestamp>.md` (and synced too), so nothing is lost and you can merge by hand.
 
 If a device has already synced to the wrong repository: connect it to the right one as above, press **Reset local history (keep notes)** in the Recovery section, then **Sync now**. The extra repository can be deleted in the dashboard (Storage & databases → Artifacts → the repository).
 
@@ -47,6 +47,10 @@ Rule of thumb: press Sync now before you leave a device and after you pick up th
 ## When two places edit the same note
 
 If the remote changed a note that you also edited (or deleted) since your last sync, the plugin stops before pushing and shows a notice. Nothing is overwritten. Resolve it with any Git client (or copy the note aside, delete the folder's `.git`, sync again, and paste your version back). Automatic "keep both versions" handling is planned.
+
+## When a sync fails
+
+The notice names the underlying failure (not just "multiple errors"), and the full details, including every file operation that failed, are written to `.obsidian/plugins/cloudflare-artifacts-sync/last-error.txt` in the vault. On a phone, open that file in Obsidian (or any file manager) and send it along when reporting a problem.
 
 ## Desktop and mobile
 
@@ -81,6 +85,8 @@ Obsidian の保管庫（またはその中の 1 フォルダ）を Cloudflare Ar
 - 手順（コマンド不要）: ① Cloudflare ダッシュボード → マイプロフィール → API トークン → トークンを作成 → カスタムトークン（権限: アカウント / Artifacts / 編集）で API トークンを 1 つ作る ② プラグイン設定にアカウント ID と API トークンを貼る ③「Set up」を押す（名前空間とリポジトリを作り、30 日有効の書き込みトークンを発行して自動で入れます。期限前に自動更新。**この時点では何も送られません**） ④「Sync now」を押す（設定画面の一番上のボタン、左の帯の更新アイコン、画面下の「Artifacts」の表示、コマンドパレットのどれでも同じ）。
 - **2 台目（スマホや別の PC）で同じ保管庫を使うとき**: 「Set up」は押さない（保管庫名が違うと別のリポジトリができます）。① 同じアカウント ID・API トークン・名前空間を入れる ②「Choose repository」で 1 台目が作ったリポジトリを選ぶ（トークン発行と remote URL の入力は自動） ③「Branch」と「Folder to sync」を 1 台目と同じにする（通常は main と空欄） ④「Sync now」。
 - 間違ったリポジトリに同期してしまったら: 正しいリポジトリに「Choose repository」でつなぎ直し → 設定の一番下「Reset local history (keep notes)」（ノートは消えません。履歴だけ消します）→「Sync now」。余分なリポジトリはダッシュボード（Storage & databases → Artifacts）で削除できます。
+- 2 台目の初回同期（と Reset 後の同期）は、リポジトリ側を正として取り込みます。同じ名前で中身が違うノートが手元にあった場合は、リポジトリ版を置き、手元の版を `<名前>.local-<日時>.md` として隣に残します（これも同期されます）。消えるものはありません。
+- 同期に失敗したときは、通知に原因が出るほか、`.obsidian/plugins/cloudflare-artifacts-sync/last-error.txt` に全文が残ります。スマホでもこのファイルを送ってもらえれば原因を追えます。
 - 端末を切り替える前後に「Sync now」を押すか、両方で自動同期の間隔を入れておくのが安全です。
 - デスクトップとスマホ（iOS / Android）の両方で動きます。スマホでは Obsidian のファイル機能と通信機能だけで同期するので、Git の道具は要りません。大きな保管庫はスマホでは遅くなるので、同期するフォルダを 1 つに絞るのがおすすめです。
 - リモートと衝突したときは上書きせずに止まり、Git クライアントでの解決を案内します。

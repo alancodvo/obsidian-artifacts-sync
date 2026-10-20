@@ -47,6 +47,8 @@ export interface SyncResult {
   pulled: boolean;
   pushed: boolean;
   head: string | null;
+  /** Local files renamed to `.local-<timestamp>` copies because the adopted repository had a different version. */
+  setAside: string[];
 }
 
 export class GitConflictError extends Error {
@@ -57,6 +59,45 @@ export class GitConflictError extends Error {
 }
 
 const REMOTE_NAME = "origin";
+
+/** The distinct messages inside an error, following `errors` (MultipleGitError, AggregateError) and `cause`. */
+export function errorMessages(err: unknown, limit = 5): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const walk = (e: unknown, depth: number) => {
+    if (out.length >= limit || depth > 4 || e === null || e === undefined) return;
+    const inner = (e as { errors?: unknown }).errors;
+    if (Array.isArray(inner) && inner.length) {
+      for (const x of inner) walk(x, depth + 1);
+      return;
+    }
+    const message = e instanceof Error ? e.message || e.name : String(e);
+    if (!seen.has(message)) {
+      seen.add(message);
+      out.push(message);
+    }
+    const cause = (e as { cause?: unknown }).cause;
+    if (cause && cause !== e) walk(cause, depth + 1);
+  };
+  walk(err, 0);
+  return out;
+}
+
+/**
+ * isomorphic-git reports a checkout where several files failed as one MultipleGitError whose text
+ * only says to look at the "errors" property. Turn that into a message that names the first few
+ * underlying failures (they are usually all the same one).
+ */
+export function unwrapGitError(err: unknown, doing: string): Error {
+  const inner = (err as { errors?: unknown }).errors;
+  if (!Array.isArray(inner) || inner.length === 0) return err instanceof Error ? err : new Error(String(err));
+  const messages = errorMessages(err, 3);
+  const more = inner.length > messages.length ? ` (and ${inner.length - messages.length} more)` : "";
+  const out = new Error(`${inner.length} file operation${inner.length === 1 ? "" : "s"} failed while ${doing}: ${messages.join(" | ")}${more}`);
+  out.name = "CheckoutFilesError";
+  (out as { errors?: unknown }).errors = inner;
+  return out;
+}
 
 function joinPath(dir: string, name: string): string {
   if (!dir || dir === ".") return name;
@@ -126,8 +167,11 @@ export class ArtifactsGit {
   }
 
   /**
-   * First sync into a folder that has no commits yet: take the remote branch as the starting point
-   * (files already in the folder stay and are committed on top). Returns true when adopted.
+   * First sync into a folder that has no commits yet: take the remote branch as the starting point.
+   * The repository wins: a file that exists both here and in the repository is overwritten with the
+   * repository's version (force checkout), files that exist only here stay and are committed on
+   * top. That is what a second device wants, and it is also the way out after "Reset local
+   * history". Returns true when adopted.
    */
   async adoptRemoteIfEmpty(): Promise<boolean> {
     if (await this.head()) return false;
@@ -140,8 +184,55 @@ export class ArtifactsGit {
       singleBranch: true,
       onAuth: this.onAuth,
     });
-    await git.checkout({ ...this.base, ref: this.opts.branch, remote: REMOTE_NAME });
+    const kept = await this.setAsideDifferingLocalCopies();
+    try {
+      await git.checkout({ ...this.base, ref: this.opts.branch, remote: REMOTE_NAME, force: true });
+    } catch (err) {
+      throw unwrapGitError(err, "checking out the repository");
+    }
+    this.lastAdoption = { setAside: kept };
     return true;
+  }
+
+  /** What the last adoption did, for the summary line. */
+  lastAdoption: { setAside: string[] } | null = null;
+
+  /**
+   * Before the repository's files are written over this folder: any local file that the repository
+   * also has, with different content, is renamed to `<name>.local-<timestamp>.<ext>` next to it.
+   * Nothing is lost; the copy is then committed on top and reaches the other devices, where the
+   * person decides. Identical files are left alone. Returns the paths that were set aside.
+   */
+  private async setAsideDifferingLocalCopies(): Promise<string[]> {
+    const { dir } = this.opts;
+    const fsp = this.opts.fs.promises;
+    const ref = `refs/remotes/${REMOTE_NAME}/${this.opts.branch}`;
+    const commitOid = await git.resolveRef({ ...this.base, ref });
+    const remoteFiles = await git.listFiles({ ...this.base, ref: commitOid });
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "").replace(/^(\d{8})(\d{4})$/, "$1-$2");
+    const setAside: string[] = [];
+    for (const filepath of remoteFiles) {
+      const local = joinPath(dir, filepath);
+      let bytes: Uint8Array;
+      try {
+        const s = await fsp.lstat(local);
+        if (!s.isFile()) continue;
+        const data = await fsp.readFile(local);
+        bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+      } catch {
+        continue; // not here: nothing to protect
+      }
+      const { oid: localOid } = await git.hashBlob({ object: bytes });
+      const { oid: remoteOid } = await git.readBlob({ ...this.base, oid: commitOid, filepath });
+      if (localOid === remoteOid) continue;
+      const dot = filepath.lastIndexOf(".");
+      const slash = filepath.lastIndexOf("/");
+      const aside = dot > slash ? `${filepath.slice(0, dot)}.local-${stamp}${filepath.slice(dot)}` : `${filepath}.local-${stamp}`;
+      await fsp.writeFile(joinPath(dir, aside), bytes);
+      await fsp.unlink(local);
+      setAside.push(aside);
+    }
+    return setAside;
   }
 
   /** Stage every change (respecting the ignore list) and commit. Returns counts; 0/0 means nothing to commit. */
@@ -222,6 +313,6 @@ export class ArtifactsGit {
     const commit = await this.commitAll(now);
     const pulled = adopted || (await this.pull());
     const pushed = await this.push();
-    return { ...commit, pulled, pushed, head: await this.head() };
+    return { ...commit, pulled, pushed, head: await this.head(), setAside: adopted ? (this.lastAdoption?.setAside ?? []) : [] };
   }
 }

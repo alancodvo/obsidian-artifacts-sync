@@ -9,7 +9,7 @@ if (typeof (globalThis as { Buffer?: unknown }).Buffer === "undefined") {
   (globalThis as { Buffer?: unknown }).Buffer = BufferPolyfill;
 }
 import { ArtifactsApi, type RepoInfo, repoNameFromVault } from "./api";
-import { ArtifactsGit, GitConflictError, type GitFs, type GitHttp } from "./git";
+import { ArtifactsGit, GitConflictError, errorMessages, type GitFs, type GitHttp } from "./git";
 import { createRequestUrlFetch, createRequestUrlHttp } from "./obsidian-http";
 import { createVaultFs } from "./vault-fs";
 
@@ -244,6 +244,60 @@ export default class ArtifactsSyncPlugin extends Plugin {
     this.statusBar?.setText(text);
   }
 
+  /**
+   * Write everything known about a failure to the plugin's folder in the vault, so a report from a
+   * phone can be sent as one file. Returns the vault path, or null when even that failed.
+   */
+  private async writeErrorReport(label: string, err: unknown): Promise<string | null> {
+    const dir = this.manifest.dir;
+    if (!dir) return null;
+    const path = normalizePath(`${dir}/last-error.txt`);
+    const lines: string[] = [
+      `Cloudflare Artifacts Sync ${this.manifest.version}`,
+      `when: ${new Date().toISOString()}`,
+      `platform: ${Platform.isMobile ? "mobile" : "desktop"}${Platform.isIosApp ? " ios" : ""}${Platform.isAndroidApp ? " android" : ""}`,
+      `step: ${label}`,
+      `folder: ${this.settings.syncFolder || "(vault root)"}  branch: ${this.settings.branch}`,
+      "",
+      `messages: ${errorMessages(err, 10).join(" | ")}`,
+      "",
+    ];
+    const dump = (e: unknown, indent: string) => {
+      if (e === null || e === undefined) {
+        lines.push(`${indent}(rejected with ${String(e)})`);
+        return;
+      }
+      if (e instanceof Error) {
+        lines.push(`${indent}${e.name}: ${e.message}`);
+        const code = (e as { code?: unknown }).code;
+        if (code) lines.push(`${indent}code: ${String(code)}`);
+        if (e.stack) lines.push(...e.stack.split("\n").slice(0, 12).map((l) => `${indent}  ${l.trim()}`));
+      } else {
+        lines.push(`${indent}${String(e)}`);
+      }
+      const inner = (e as { errors?: unknown }).errors;
+      if (Array.isArray(inner)) {
+        lines.push(`${indent}errors (${inner.length}):`);
+        inner.slice(0, 20).forEach((x, i) => {
+          lines.push(`${indent}  [${i}]`);
+          dump(x, `${indent}    `);
+        });
+      }
+      const cause = (e as { cause?: unknown }).cause;
+      if (cause && cause !== e) {
+        lines.push(`${indent}cause:`);
+        dump(cause, `${indent}  `);
+      }
+    };
+    try {
+      dump(err, "");
+      await this.app.vault.adapter.write(path, lines.join("\n") + "\n");
+      return path;
+    } catch {
+      return null;
+    }
+  }
+
   private notice(text: string): void {
     if (this.settings.showNotices) new Notice(text);
   }
@@ -263,15 +317,23 @@ export default class ArtifactsSyncPlugin extends Plugin {
       this.setStatus(`Artifacts: ${summary}`);
       this.notice(`Cloudflare Artifacts Sync: ${summary}`);
     } catch (err) {
-      let message = err instanceof GitConflictError ? err.message : `${label} failed: ${err instanceof Error ? err.message : String(err)}`;
-      // A ReferenceError means a missing global (phones have fewer than desktops). Phones have no
-      // console to read, so put the first stack frame in the notice; it says which module asked.
-      if (err instanceof ReferenceError && err.stack) {
-        const frame = err.stack.split("\n").map((l) => l.trim()).find((l) => l.startsWith("at ") || l.includes("@"));
-        if (frame) message += ` (${frame.slice(0, 120)})`;
+      let message: string;
+      if (err instanceof GitConflictError) {
+        message = err.message;
+      } else {
+        // Name the underlying failures, not the wrapper: isomorphic-git's "multiple errors" text
+        // says nothing, and a phone has no console to look the rest up in.
+        message = `${label} failed: ${errorMessages(err, 3).join(" | ") || String(err)}`;
+        // A ReferenceError means a missing global (phones have fewer than desktops): say which
+        // module asked for it.
+        if (err instanceof ReferenceError && err.stack) {
+          const frame = err.stack.split("\n").map((l) => l.trim()).find((l) => l.startsWith("at ") || l.includes("@"));
+          if (frame) message += ` (${frame.slice(0, 120)})`;
+        }
       }
       this.setStatus("Artifacts: error");
-      new Notice(`Cloudflare Artifacts Sync ${this.manifest.version}: ${message}`, 10_000);
+      const report = await this.writeErrorReport(label, err);
+      new Notice(`Cloudflare Artifacts Sync ${this.manifest.version}: ${message}${report ? `\nFull details: ${report}` : ""}`, 15_000);
       console.error("[cloudflare-artifacts-sync]", err);
     } finally {
       this.running = false;
@@ -283,7 +345,8 @@ export default class ArtifactsSyncPlugin extends Plugin {
       const r = await client.sync();
       const when = new Date().toLocaleTimeString();
       const changes = r.committed ? `${r.added} changed, ${r.removed} removed` : "no local changes";
-      return `synced at ${when} (${changes}${r.pulled ? ", pulled updates" : ""})${trigger === "manual" ? "" : ""}`;
+      const kept = r.setAside.length ? `; ${r.setAside.length} local cop${r.setAside.length === 1 ? "y" : "ies"} kept as .local-… files` : "";
+      return `synced at ${when} (${changes}${r.pulled ? ", pulled updates" : ""}${kept})${trigger === "manual" ? "" : ""}`;
     });
   }
 
