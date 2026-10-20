@@ -4,7 +4,9 @@ Sync your Obsidian vault, or one folder of it, with a [Cloudflare Artifacts](htt
 
 One command (or a timer) does commit → pull → push. No Git knowledge is needed: paste a remote URL and a token, and press **Sync now**.
 
-日本語の説明は下にあります。
+日本語の導入手順と使い方は **[README.ja.md](README.ja.md)** にあります。
+
+Requires a Cloudflare account with Artifacts available (Workers Paid plan at the time of writing). Nothing else is required, and nothing is paid to the plugin author.
 
 ## What it does
 
@@ -76,17 +78,14 @@ ARTIFACTS_REMOTE=… ARTIFACTS_TOKEN=… npm run e2e:bundle   # the built main.j
 CLOUDFLARE_ACCOUNT_ID=… CLOUDFLARE_API_TOKEN=… npm run e2e:api   # REST client: namespace, repo, token, push
 ```
 
+## Support
+
+If this plugin saves you time, you can support its development through [GitHub Sponsors](https://github.com/sponsors/KOIYAL). Bug reports and feature requests are welcome in the [issue tracker](https://github.com/KOIYAL/obsidian-artifacts-sync/issues).
+
+## License
+
+[MIT](LICENSE) © 2026 KOIYAL (Yoshihiro Arakawa). Built on [isomorphic-git](https://isomorphic-git.org/) (MIT). Not affiliated with Cloudflare or Obsidian.
+
 ## 日本語
 
-Obsidian の保管庫（またはその中の 1 フォルダ）を Cloudflare Artifacts のリポジトリと同期します。Git の知識は不要で、remote URL とトークンを貼って「Sync now」を押すだけです。
-
-- 通信先は、設定した Artifacts の URL（ノートの内容を送る）と、準備・トークン更新のときだけ使う api.cloudflare.com の 2 つです。その他の送信や計測はありません。
-- トークンはこの保管庫のプラグイン設定（`.obsidian/plugins/cloudflare-artifacts-sync/data.json`）に保存されます。
-- 手順（コマンド不要）: ① Cloudflare ダッシュボード → マイプロフィール → API トークン → トークンを作成 → カスタムトークン（権限: アカウント / Artifacts / 編集）で API トークンを 1 つ作る ② プラグイン設定にアカウント ID と API トークンを貼る ③「Set up」を押す（名前空間とリポジトリを作り、30 日有効の書き込みトークンを発行して自動で入れます。期限前に自動更新。**この時点では何も送られません**） ④「Sync now」を押す（設定画面の一番上のボタン、左の帯の更新アイコン、画面下の「Artifacts」の表示、コマンドパレットのどれでも同じ）。
-- **2 台目（スマホや別の PC）で同じ保管庫を使うとき**: 「Set up」は押さない（保管庫名が違うと別のリポジトリができます）。① 同じアカウント ID・API トークン・名前空間を入れる ②「Choose repository」で 1 台目が作ったリポジトリを選ぶ（トークン発行と remote URL の入力は自動） ③「Branch」と「Folder to sync」を 1 台目と同じにする（通常は main と空欄） ④「Sync now」。
-- 間違ったリポジトリに同期してしまったら: 正しいリポジトリに「Choose repository」でつなぎ直し → 設定の一番下「Reset local history (keep notes)」（ノートは消えません。履歴だけ消します）→「Sync now」。余分なリポジトリはダッシュボード（Storage & databases → Artifacts）で削除できます。
-- 2 台目の初回同期（と Reset 後の同期）は、リポジトリ側を正として取り込みます。同じ名前で中身が違うノートが手元にあった場合は、リポジトリ版を置き、手元の版を `<名前>.local-<日時>.md` として隣に残します（これも同期されます）。消えるものはありません。
-- 同期に失敗したときは、通知に原因が出るほか、`.obsidian/plugins/cloudflare-artifacts-sync/last-error.txt` に全文が残ります。スマホでもこのファイルを送ってもらえれば原因を追えます。
-- 端末を切り替える前後に「Sync now」を押すか、両方で自動同期の間隔を入れておくのが安全です。
-- デスクトップとスマホ（iOS / Android）の両方で動きます。スマホでは Obsidian のファイル機能と通信機能だけで同期するので、Git の道具は要りません。大きな保管庫はスマホでは遅くなるので、同期するフォルダを 1 つに絞るのがおすすめです。
-- リモートと衝突したときは上書きせずに止まり、Git クライアントでの解決を案内します。
+導入手順・使い方・困ったときの対処は **[README.ja.md](README.ja.md)** をご覧ください。
