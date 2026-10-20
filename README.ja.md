@@ -21,7 +21,7 @@ Obsidian の保管庫（またはその中の 1 フォルダ）を、Cloudflare 
 
 ### 載る前（ファイルを置く）
 
-1. [リリースページ](https://github.com/KOIYAL/obsidian-artifacts-sync/releases/latest) から `main.js`・`manifest.json`・`styles.css` の 3 つを取る
+1. [リリースページ](https://github.com/alancodvo/obsidian-artifacts-sync/releases/latest) から `main.js`・`manifest.json`・`styles.css` の 3 つを取る
 2. 保管庫の中の `.obsidian/plugins/cloudflare-artifacts-sync/` というフォルダを作り、3 つを入れる（**フォルダ名はこのとおりに**。違う名前でも動きますが、更新のときに迷います）
    - PC: エクスプローラー / Finder で保管庫のフォルダを開く。`.obsidian` は隠しフォルダなので「隠しファイルを表示」にする
    - iPhone / iPad: 「ファイル」アプリ → Obsidian の保管庫 → `.obsidian/plugins/` に入れる
@@ -156,7 +156,7 @@ Cloudflare ダッシュボードの **Workers & Pages** を開くと、右側に
 
 ---
 
-不具合や要望は [Issues](https://github.com/KOIYAL/obsidian-artifacts-sync/issues) へ（日本語で構いません）。
+不具合や要望は [Issues](https://github.com/alancodvo/obsidian-artifacts-sync/issues) へ（日本語で構いません）。
 
 ## ライセンス
 
