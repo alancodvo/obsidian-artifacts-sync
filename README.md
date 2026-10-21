@@ -49,6 +49,10 @@ If a device has already synced to the wrong repository: connect it to the right 
 
 Rule of thumb: press Sync now before you leave a device and after you pick up the next one, or turn on the automatic sync interval on both.
 
+## Sharing a vault with other people
+
+After each sync that brings in commits by someone else, a notice lists the notes they changed and who changed them ("2 notes changed by others since your last sync"), so you can look before you edit the same note. For this to work, every person sets their own **Name** (and ideally **Email**) in the plugin's Author section; two people with the same name look like one. The notice is shown even when "Show a notice after each sync" is off. Edits from your other devices with the same name count as yours and are not listed.
+
 ## When two places edit the same note
 
 If the remote changed a note that you also edited (or deleted) since your last sync, the plugin stops before pushing and shows a notice. Nothing is overwritten. Resolve it with any Git client (or copy the note aside, delete the folder's `.git`, sync again, and paste your version back). Automatic "keep both versions" handling is planned.

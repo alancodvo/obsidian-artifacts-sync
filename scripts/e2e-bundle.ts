@@ -55,7 +55,11 @@ const NODE_ONLY = /^(node:)?(fs|path|http|https|url|querystring|crypto|zlib|stre
 
 async function runMode(mode: Mode): Promise<boolean> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), `artifacts-sync-bundle-${mode}-`));
+  // A second vault in the mobile pass: "another person" who edits the shared repository.
+  const otherRoot = fs.mkdtempSync(path.join(os.tmpdir(), `artifacts-sync-bundle-${mode}-other-`));
   const notices: string[] = [];
+  // What the next plugin instance reads as its saved settings (see loadData below).
+  let savedData: Record<string, unknown> = { remoteUrl, token, syncFolder: "Knowledge", showNotices: true };
   class FileSystemAdapter {
     constructor(private readonly base: string) {}
     getBasePath() {
@@ -74,7 +78,7 @@ async function runMode(mode: Mode): Promise<boolean> {
       registerEvent() {}
       registerInterval() {}
       async loadData() {
-        return { remoteUrl, token, syncFolder: "Knowledge", showNotices: true };
+        return savedData;
       }
       async saveData() {}
     },
@@ -170,10 +174,36 @@ async function runMode(mode: Mode): Promise<boolean> {
       // A second sync has nothing to do and must not fail either.
       await plugin.runSync("manual");
       if (!notices.some((n) => /synced at .*no local changes/.test(n))) problems.push("second sync did not report 'no local changes'");
+      // Another person (own vault, own author name) adopts the repository, changes one note and adds
+      // one, and pushes. The phone's next sync must name both notes and the person.
+      savedData = { ...savedData, authorName: "Desk Person", authorEmail: "desk@example.com" };
+      const other = new PluginClass();
+      other.app = { vault: { adapter: fakeAdapter(otherRoot), configDir: ".obsidian", getName: () => "other-vault", on: () => ({}) }, workspace: {} };
+      await other.onload();
+      await other.runSync("manual");
+      const writeOther = (rel: string, text: string) => {
+        fs.mkdirSync(path.dirname(path.join(otherRoot, rel)), { recursive: true });
+        fs.writeFileSync(path.join(otherRoot, rel), text);
+      };
+      writeOther(`${T}/Guide/intro.md`, "# intro (edited by Desk Person)\n");
+      writeOther(`${T}/Guide/new.md`, "# new (from Desk Person)\n");
+      const beforeOthers = notices.length;
+      await other.runSync("manual");
+      await plugin.runSync("manual");
+      const since = notices.slice(beforeOthers);
+      const expectOthers = new RegExp(`2 notes changed by others since your last sync\\nDesk Person: ${T}/Guide/intro.md\\nDesk Person: ${T}/Guide/new.md`);
+      if (!since.some((n) => expectOthers.test(n))) problems.push("the phone was not told which notes Desk Person changed");
+      if (!since.some((n) => /synced at .*no local changes, pulled updates; 2 notes changed by others\)/.test(n))) problems.push("the sync summary did not count the 2 notes changed by others");
+      if (read(`${T}/Guide/intro.md`) !== "# intro (edited by Desk Person)\n") problems.push("Desk Person's edit did not arrive");
+      // My own commits are never reported as other people's: a sync with only my change says nothing about others.
+      const beforeMine = notices.length;
+      write(`${T}/Phone/memo.md`, "# memo (from phone, edited)\n");
+      await plugin.runSync("manual");
+      if (notices.slice(beforeMine).some((n) => /changed by others/.test(n))) problems.push("my own change was reported as someone else's");
       // Leave the repository as it was found: remove the stamped folder and push the deletion.
       fs.rmSync(path.join(root, T), { recursive: true, force: true });
       await plugin.runSync("manual");
-      if (!notices.some((n) => new RegExp(`synced at .*0 changed, ${fixtureCount + 2} removed`).test(n))) problems.push(`cleanup did not report '${fixtureCount + 2} removed'`);
+      if (!notices.some((n) => new RegExp(`synced at .*0 changed, ${fixtureCount + 3} removed`).test(n))) problems.push(`cleanup did not report '${fixtureCount + 3} removed'`);
       const report = read(".obsidian/plugins/cloudflare-artifacts-sync/last-error.txt");
       if (report) problems.push(`an error report was written:\n${report.slice(0, 1500)}`);
       console.log(`    adapter calls: ${stats.calls}, peak in flight: ${stats.peak}`);
@@ -185,6 +215,7 @@ async function runMode(mode: Mode): Promise<boolean> {
   } finally {
     (Module as unknown as { _load: unknown })._load = origLoad;
     fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(otherRoot, { recursive: true, force: true });
   }
 }
 

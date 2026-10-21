@@ -91,7 +91,7 @@ Cloudflare ダッシュボードの **Workers & Pages** を開くと、右側に
 | **Sync shortly after a note changes** | ノートを保存してから 30 秒後に自動で同期する |
 | **Folder to sync** | 空欄なら保管庫全体。1 つのフォルダ名を入れると、そのフォルダだけ同期します。**スマホで大きな保管庫を扱うときは、ここで 1 フォルダに絞るのがおすすめ**（速くなります） |
 | **Ignore** | 同期しないもの。既定で `.obsidian/`（設定）と `.trash/`（ゴミ箱）が入っています |
-| **Name / Email** | 履歴に記録される名前。何でも構いません |
+| **Name / Email** | 履歴に記録される名前。1 人で使うなら何でも構いません。**複数人で同じリポジトリを使うときは、人ごとに違う名前を入れてください**（「他の人が変えたノート」の判定に使います） |
 | **Show a notice after each sync** | 同期のたびに右上の通知を出すか |
 | **Check settings** | 入れた値に不備が無いかだけ確認します（通信はしません） |
 
@@ -99,13 +99,17 @@ Cloudflare ダッシュボードの **Workers & Pages** を開くと、右側に
 
 同期の中身は「変更したファイルをすべて記録 → 他の端末が送ったものを取り込む → 送る」です。同じノートを両方の端末で同時に変えていて機械的に合わせられないときは、上書きせずに止まって通知します（下の「困ったとき」）。
 
+### 複数人で同じリポジトリを使うとき
+
+他の人の変更を取り込んだ同期では、「2 notes changed by others since your last sync」のあとに **誰がどのノートを変えたか** が通知に並びます（最大 6 件、それ以上は「and N more」）。同じノートを触る前に気づくための通知なので、「Show a notice after each sync」を切っていても出ます。判定は Author の **Name / Email** で行うため、人ごとに違う名前を入れておいてください。自分の別端末からの変更は（同じ名前なら）自分の変更として扱われ、通知には出ません。
+
 ---
 
 ## 6. 困ったとき
 
 ### 通知の読み方
 
-通知は「Cloudflare Artifacts Sync 0.4.3: syncing failed: 〜」の形で、〜の部分に原因が入ります。あわせて、保管庫の中の `.obsidian/plugins/cloudflare-artifacts-sync/last-error.txt` に全文が残ります（スマホでも Obsidian で開けます）。問い合わせるときはこのファイルを添えてください。
+通知は「Cloudflare Artifacts Sync 0.4.6: syncing failed: 〜」の形で、〜の部分に原因が入ります。あわせて、保管庫の中の `.obsidian/plugins/cloudflare-artifacts-sync/last-error.txt` に全文が残ります（スマホでも Obsidian で開けます）。問い合わせるときはこのファイルを添えてください。
 
 | 通知に出る言葉 | 意味と対処 |
 |---|---|

@@ -40,6 +40,19 @@ export interface GitOptions {
   author: { name: string; email: string };
 }
 
+/** A file that a commit by someone other than this device's author touched. */
+export interface OtherChange {
+  path: string;
+  author: string;
+}
+
+export interface PullResult {
+  /** HEAD moved. */
+  changed: boolean;
+  /** Files changed by other authors among the commits this pull brought in (empty on a first sync). */
+  byOthers: OtherChange[];
+}
+
 export interface SyncResult {
   committed: boolean;
   added: number;
@@ -49,7 +62,12 @@ export interface SyncResult {
   head: string | null;
   /** Local files renamed to `.local-<timestamp>` copies because the adopted repository had a different version. */
   setAside: string[];
+  /** Files changed by other authors among the commits this sync brought in. */
+  byOthers: OtherChange[];
 }
+
+/** Stop looking for other people's commits after this many; the notice only names a few anyway. */
+const MAX_INCOMING_COMMITS = 50;
 
 export class GitConflictError extends Error {
   constructor(message: string) {
@@ -261,12 +279,63 @@ export class ArtifactsGit {
     return refs.some((r) => r.ref === `refs/heads/${this.opts.branch}`);
   }
 
+  /**
+   * Files changed by commits that are reachable from `incoming` but were not part of `before`,
+   * leaving out commits by this device's author. Follows parent links (not timestamps, which differ
+   * between devices) from `incoming` and stops at `before` and at the merge bases of the two, so
+   * shared history is never counted. Merge commits are skipped: their content is in the commits
+   * they merge. Capped at MAX_INCOMING_COMMITS commits; a path keeps the author of its newest commit.
+   */
+  async changesByOthers(before: string, incoming: string): Promise<OtherChange[]> {
+    if (before === incoming) return [];
+    const stop = new Set<string>([before]);
+    for (const oid of (await git.findMergeBase({ ...this.base, oids: [before, incoming] })) as string[]) stop.add(oid);
+    const { name, email } = this.opts.author;
+    const seen = new Set<string>();
+    const queue = [incoming];
+    const byPath = new Map<string, string>();
+    let visited = 0;
+    while (queue.length && visited < MAX_INCOMING_COMMITS) {
+      const oid = queue.shift() as string;
+      if (seen.has(oid) || stop.has(oid)) continue;
+      seen.add(oid);
+      visited++;
+      const { commit } = await git.readCommit({ ...this.base, oid });
+      queue.push(...commit.parent);
+      if (commit.parent.length > 1) continue;
+      if (commit.author.name === name && commit.author.email === email) continue;
+      for (const path of await this.changedPaths(oid, commit.parent[0])) {
+        if (!byPath.has(path)) byPath.set(path, commit.author.name || commit.author.email);
+      }
+    }
+    return [...byPath].map(([path, author]) => ({ path, author })).sort((a, b) => a.path.localeCompare(b.path));
+  }
+
+  /** Paths whose blob differs between a commit and its parent (every path when there is no parent). Subtrees with the same id are not entered. */
+  private async changedPaths(oid: string, parent: string | undefined): Promise<string[]> {
+    const trees = parent ? [git.TREE({ ref: oid }), git.TREE({ ref: parent })] : [git.TREE({ ref: oid })];
+    const found = (await git.walk({
+      ...this.base,
+      trees,
+      map: async (filepath, [a, b]) => {
+        if (!a && !b) return null;
+        const [oidA, oidB] = await Promise.all([a?.oid(), b?.oid()]);
+        if (oidA === oidB) return null; // identical here and below
+        const type = await (a ?? b)?.type();
+        if (type === "tree") return undefined; // walk the children, do not list the folder itself
+        return filepath;
+      },
+    })) as unknown;
+    const flat = (Array.isArray(found) ? found.flat(Infinity) : [found]) as unknown[];
+    return flat.filter((x): x is string => typeof x === "string" && x !== ".");
+  }
+
   /** Fetch and merge the remote branch. Fast-forward when possible, otherwise a merge commit. */
-  async pull(): Promise<boolean> {
-    if (await this.adoptRemoteIfEmpty()) return true;
-    if (!(await this.remoteHasBranch())) return false;
+  async pull(): Promise<PullResult> {
+    if (await this.adoptRemoteIfEmpty()) return { changed: true, byOthers: [] };
+    if (!(await this.remoteHasBranch())) return { changed: false, byOthers: [] };
     const before = await this.head();
-    if (!before) return false; // nothing local and nothing remote: a brand-new repository
+    if (!before) return { changed: false, byOthers: [] }; // nothing local and nothing remote: a brand-new repository
     try {
       await git.pull({
         ...this.base,
@@ -287,7 +356,16 @@ export class ArtifactsGit {
       throw err;
     }
     const after = await this.head();
-    return before !== after;
+    if (!after || after === before) return { changed: false, byOthers: [] };
+    // What came in is the remote branch; after a merge commit HEAD is one step past it.
+    const incoming = await git.resolveRef({ ...this.base, ref: `refs/remotes/${REMOTE_NAME}/${this.opts.branch}` }).catch(() => after);
+    let byOthers: OtherChange[] = [];
+    try {
+      byOthers = await this.changesByOthers(before, incoming);
+    } catch (err) {
+      console.warn("[cloudflare-artifacts-sync] could not list the incoming changes", err);
+    }
+    return { changed: true, byOthers };
   }
 
   async push(): Promise<boolean> {
@@ -311,8 +389,15 @@ export class ArtifactsGit {
     await this.ensureRepo();
     const adopted = await this.adoptRemoteIfEmpty();
     const commit = await this.commitAll(now);
-    const pulled = adopted || (await this.pull());
+    const pull = adopted ? { changed: true, byOthers: [] } : await this.pull();
     const pushed = await this.push();
-    return { ...commit, pulled, pushed, head: await this.head(), setAside: adopted ? (this.lastAdoption?.setAside ?? []) : [] };
+    return {
+      ...commit,
+      pulled: pull.changed,
+      pushed,
+      head: await this.head(),
+      setAside: adopted ? (this.lastAdoption?.setAside ?? []) : [],
+      byOthers: pull.byOthers,
+    };
   }
 }

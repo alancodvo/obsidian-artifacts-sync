@@ -9,7 +9,7 @@ import { parseArtifactsRemote, tokenStatus, validateSettings } from "./core";
 const win = window as Window & { Buffer?: unknown };
 if (typeof win.Buffer === "undefined") win.Buffer = BufferPolyfill;
 import { ArtifactsApi, type RepoInfo, repoNameFromVault } from "./api";
-import { ArtifactsGit, GitConflictError, errorMessages, type GitFs, type GitHttp } from "./git";
+import { ArtifactsGit, GitConflictError, errorMessages, type GitFs, type GitHttp, type OtherChange } from "./git";
 import { createRequestUrlFetch, createRequestUrlHttp } from "./obsidian-http";
 import { createVaultFs } from "./vault-fs";
 
@@ -18,6 +18,8 @@ const RENEW_BEFORE_MS = 2 * 24 * 3_600_000;
 import { ArtifactsSyncSettingTab, DEFAULT_SETTINGS, type ArtifactsSyncSettings } from "./settings";
 
 const CHANGE_DEBOUNCE_MS = 30_000;
+/** How many of other people's changed notes one notice lists by name. */
+const OTHERS_SHOWN = 6;
 
 export default class ArtifactsSyncPlugin extends Plugin {
   settings: ArtifactsSyncSettings = { ...DEFAULT_SETTINGS };
@@ -306,6 +308,24 @@ export default class ArtifactsSyncPlugin extends Plugin {
     if (this.settings.showNotices) new Notice(text);
   }
 
+  /**
+   * Tell the person which notes other people changed since their last sync, so they see it before
+   * editing the same note. Shown even when the per-sync notice is off: it is the one message a
+   * shared vault needs. Returns the short form for the status bar, or "" when nothing came in.
+   */
+  private announceOthers(byOthers: OtherChange[]): string {
+    if (byOthers.length === 0) return "";
+    const shown = byOthers.slice(0, OTHERS_SHOWN);
+    const more = byOthers.length - shown.length;
+    // Paths come back relative to the synced folder; show them as the vault knows them.
+    const prefix = this.settings.syncFolder ? `${normalizePath(this.settings.syncFolder)}/` : "";
+    const lines = shown.map((c) => `${c.author}: ${prefix}${c.path}`);
+    if (more > 0) lines.push(`and ${more} more`);
+    const count = `${byOthers.length} note${byOthers.length === 1 ? "" : "s"} changed by others`;
+    new Notice(`Cloudflare Artifacts Sync: ${count} since your last sync\n${lines.join("\n")}`, 12_000);
+    return count;
+  }
+
   private async guarded(label: string, work: (client: ArtifactsGit) => Promise<string>): Promise<void> {
     if (this.running) {
       new Notice("Cloudflare Artifacts Sync: a sync is already running.");
@@ -350,7 +370,8 @@ export default class ArtifactsSyncPlugin extends Plugin {
       const when = new Date().toLocaleTimeString();
       const changes = r.committed ? `${r.added} changed, ${r.removed} removed` : "no local changes";
       const kept = r.setAside.length ? `; ${r.setAside.length} local cop${r.setAside.length === 1 ? "y" : "ies"} kept as .local-… files` : "";
-      return `synced at ${when} (${changes}${r.pulled ? ", pulled updates" : ""}${kept})${trigger === "manual" ? "" : ""}`;
+      const others = this.announceOthers(r.byOthers);
+      return `synced at ${when} (${changes}${r.pulled ? ", pulled updates" : ""}${others ? `; ${others}` : ""}${kept})${trigger === "manual" ? "" : ""}`;
     });
   }
 
@@ -358,7 +379,8 @@ export default class ArtifactsSyncPlugin extends Plugin {
     await this.guarded("pulling", async (client) => {
       await client.ensureRepo();
       const pulled = await client.pull();
-      return pulled ? "pulled updates from Artifacts" : "already up to date";
+      const others = this.announceOthers(pulled.byOthers);
+      return pulled.changed ? `pulled updates from Artifacts${others ? ` (${others})` : ""}` : "already up to date";
     });
   }
 
