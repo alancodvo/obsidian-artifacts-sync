@@ -101,7 +101,7 @@ Cloudflare ダッシュボードの **Workers & Pages** を開くと、右側に
 
 ### 複数人で同じリポジトリを使うとき
 
-他の人の変更を取り込んだ同期では、「2 notes changed by others since your last sync」のあとに **誰がどのノートを変えたか** が通知に並びます（最大 6 件、それ以上は「and N more」）。同じノートを触る前に気づくための通知なので、「Show a notice after each sync」を切っていても出ます。判定は Author の **Name / Email** で行うため、人ごとに違う名前を入れておいてください。自分の別端末からの変更は（同じ名前なら）自分の変更として扱われ、通知には出ません。
+他の人の変更を取り込んだ同期では、「2 notes changed by others since your last sync」のあとに **誰がどのノートを変えたか** が通知に並びます（最大 6 件、それ以上は「and N more」）。同じノートを触る前に気づくための通知なので、「Show a notice after each sync」を切っていても出ます。判定は設定の「Sync behavior」にある **Name / Email** で行うため、人ごとに違う名前を入れておいてください。自分の別端末からの変更は（同じ名前なら）自分の変更として扱われ、通知には出ません。
 
 ---
 
